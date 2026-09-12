@@ -1,0 +1,22 @@
+// Simple JavaScript snippet running inside your admin dashboard
+async function postMilestoneUpdate(awb, location, status, remarks) {
+  const response = await fetch('https://zbsjubpejuvcyfmptwcv.supabase.co/rest/v1/', {
+    method: 'POST',
+    headers: {
+      'apikey': 'sb_secret_4yIgQUZzDk7qMTqkYjqwYQ_WgmlCBAB',
+      'Authorization': 'Bearer YOUR_SUPABASE_ANON_KEY',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      awb_number: awb,
+      location: location,
+      status: status,
+      remarks: remarks,
+      timestamp: new Date().toISOString()
+    })
+  });
+
+  if (response.ok) {
+    alert("Milestone logged successfully!");
+  }
+}

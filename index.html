@@ -1,22 +1,474 @@
-// Simple JavaScript snippet running inside your admin dashboard
-async function postMilestoneUpdate(awb, location, status, remarks) {
-  const response = await fetch('https://zbsjubpejuvcyfmptwcv.supabase.co/rest/v1/', {
-    method: 'POST',
-    headers: {
-      'apikey': 'sb_secret_4yIgQUZzDk7qMTqkYjqwYQ_WgmlCBAB',
-      'Authorization': 'Bearer YOUR_SUPABASE_ANON_KEY',
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      awb_number: awb,
-      location: location,
-      status: status,
-      remarks: remarks,
-      timestamp: new Date().toISOString()
-    })
-  });
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cargo Tracking & Admin Operations Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    .glass-panel { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); }
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans min-h-screen">
 
-  if (response.ok) {
-    alert("Milestone logged successfully!");
-  }
-}
+  <!-- SUPABASE CONFIGURATION -->
+  <script>
+    // YOUR SUPABASE DETAILS
+    const SUPABASE_URL = "https://zbsjubpejuvcyfmptwcv.supabase.co";
+    // PASTE YOUR PUBLIC ANON KEY (eyJ...) BETWEEN THE QUOTES BELOW:
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpic2p1YnBlanV2Y3lmbXB0d2N2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkyMTI4OTMsImV4cCI6MjEwNDc4ODg5M30.RnFdQcS3GmqSJ-hR-a3WJAK1n9ym44dMDWVrRYdYmus";
+
+    const HEADERS = {
+      "apikey": SUPABASE_ANON_KEY,
+      "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+      "Content-Type": "application/json",
+      "Prefer": "return=representation"
+    };
+  </script>
+
+  <!-- Top Bar / Navigation -->
+  <header class="bg-slate-900 text-white sticky top-0 z-30 shadow-md">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <i class="fa-solid fa-boxes-packing text-blue-400 text-2xl"></i>
+        <span class="font-bold text-lg tracking-wide">Global Cargo Tracker</span>
+      </div>
+      <div class="flex items-center space-x-4">
+        <button onclick="openClientPortalModal()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-semibold transition flex items-center gap-2">
+          <i class="fa-solid fa-magnifying-glass"></i> Test Client Search
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+    
+    <!-- Toast Notification Container -->
+    <div id="toastContainer" class="fixed top-20 right-5 z-50 space-y-2"></div>
+
+    <!-- Metric Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between">
+        <div>
+          <p class="text-xs font-bold uppercase text-slate-400 tracking-wider">Total Consignments</p>
+          <h3 id="statTotal" class="text-2xl font-black text-slate-800 mt-1">0</h3>
+        </div>
+        <div class="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+          <i class="fa-solid fa-box"></i>
+        </div>
+      </div>
+      <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between">
+        <div>
+          <p class="text-xs font-bold uppercase text-slate-400 tracking-wider">In Transit</p>
+          <h3 id="statTransit" class="text-2xl font-black text-amber-600 mt-1">0</h3>
+        </div>
+        <div class="w-10 h-10 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
+          <i class="fa-solid fa-truck-fast"></i>
+        </div>
+      </div>
+      <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between">
+        <div>
+          <p class="text-xs font-bold uppercase text-slate-400 tracking-wider">Customs Hold</p>
+          <h3 id="statCustoms" class="text-2xl font-black text-purple-600 mt-1">0</h3>
+        </div>
+        <div class="w-10 h-10 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center font-bold">
+          <i class="fa-solid fa-passport"></i>
+        </div>
+      </div>
+      <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between">
+        <div>
+          <p class="text-xs font-bold uppercase text-slate-400 tracking-wider">Delivered</p>
+          <h3 id="statDelivered" class="text-2xl font-black text-emerald-600 mt-1">0</h3>
+        </div>
+        <div class="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+          <i class="fa-solid fa-circle-check"></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- Action Forms Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      
+      <!-- Panel A: Create New Consignment -->
+      <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 space-y-4">
+        <div class="flex items-center space-x-2 border-b border-slate-100 pb-3">
+          <i class="fa-solid fa-plus-circle text-blue-600 text-lg"></i>
+          <h2 class="font-bold text-slate-800 text-base">1. Register New Consignment</h2>
+        </div>
+        <form id="createForm" onsubmit="handleCreateConsignment(event)" class="space-y-4">
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">AWB Number</label>
+              <div class="flex gap-2">
+                <input type="text" id="newAwb" required placeholder="GLD-2026-01" class="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-500 uppercase font-mono">
+                <button type="button" onclick="generateRandomAwb()" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-bold">Gen</button>
+              </div>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Initial Status</label>
+              <select id="newStatus" class="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-500">
+                <option value="Registered">Registered</option>
+                <option value="In Transit">In Transit</option>
+                <option value="Customs Hold">Customs Hold</option>
+              </select>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Sender Name</label>
+              <input type="text" id="newSender" required placeholder="e.g. Monrovia Vault Corp" class="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-500">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Receiver Name</label>
+              <input type="text" id="newReceiver" required placeholder="e.g. Seoul Precious Metals" class="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-500">
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Origin City/Hub</label>
+              <input type="text" id="newOrigin" required placeholder="Monrovia, Liberia" class="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-500">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Destination City</label>
+              <input type="text" id="newDestination" required placeholder="Seoul, South Korea" class="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-500">
+            </div>
+          </div>
+          <button type="submit" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-medium py-2.5 rounded-lg text-sm transition flex items-center justify-center gap-2">
+            <i class="fa-solid fa-save"></i> Save Shipment Record
+          </button>
+        </form>
+      </div>
+
+      <!-- Panel B: Post Milestone Update -->
+      <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 space-y-4">
+        <div class="flex items-center space-x-2 border-b border-slate-100 pb-3">
+          <i class="fa-solid fa-location-dot text-amber-500 text-lg"></i>
+          <h2 class="font-bold text-slate-800 text-base">2. Post Milestone Update</h2>
+        </div>
+        <form id="updateForm" onsubmit="handlePostMilestone(event)" class="space-y-4">
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Select Active AWB</label>
+              <select id="updateAwbSelect" required class="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-500 font-mono">
+                <option value="">-- Choose AWB --</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">New Milestone Status</label>
+              <select id="updateStatus" class="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-500">
+                <option value="In Transit">In Transit</option>
+                <option value="Customs Cleared">Customs Cleared</option>
+                <option value="Customs Hold">Customs Hold</option>
+                <option value="Out for Delivery">Out for Delivery</option>
+                <option value="Delivered">Delivered</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Current Checkpoint Location</label>
+            <input type="text" id="updateLocation" required placeholder="e.g. Dubai Freight Terminal (DXB)" class="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-500">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Remarks / Internal Notes</label>
+            <textarea id="updateRemarks" rows="2" placeholder="e.g. Cleared by customs officer. Transferred to flight EK-322." class="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-500"></textarea>
+          </div>
+          <button type="submit" class="w-full bg-amber-600 hover:bg-amber-500 text-white font-medium py-2.5 rounded-lg text-sm transition flex items-center justify-center gap-2">
+            <i class="fa-solid fa-paper-plane"></i> Post Milestone to Portal
+          </button>
+        </form>
+      </div>
+
+    </div>
+
+    <!-- Master Shipment Register Table -->
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+      <div class="p-5 border-b border-slate-100 flex flex-wrap items-center justify-between gap-4">
+        <div class="flex items-center space-x-2">
+          <i class="fa-solid fa-list-check text-slate-600"></i>
+          <h2 class="font-bold text-slate-800">Active Shipments Directory</h2>
+        </div>
+        <button onclick="loadDashboardData()" class="text-xs font-semibold text-blue-600 hover:underline flex items-center gap-1">
+          <i class="fa-solid fa-rotate"></i> Refresh Data
+        </button>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse text-sm">
+          <thead>
+            <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold text-xs uppercase tracking-wider">
+              <th class="py-3 px-4">AWB Number</th>
+              <th class="py-3 px-4">Route</th>
+              <th class="py-3 px-4">Parties</th>
+              <th class="py-3 px-4">Status</th>
+              <th class="py-3 px-4 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="shipmentsTableBody" class="divide-y divide-slate-100 font-medium">
+            <tr>
+              <td colspan="5" class="py-8 text-center text-slate-400">Loading consignments from Supabase...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Client Search Modal Sandbox -->
+  <div id="clientModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-50 w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden border border-slate-200 max-h-[90vh] flex flex-col">
+      <div class="bg-white p-6 border-b border-slate-200 flex justify-between items-center">
+        <div>
+          <h3 class="font-bold text-lg text-slate-800">Public Client Tracking Preview</h3>
+          <p class="text-xs text-slate-500">Test how customers view their AWB tracking page</p>
+        </div>
+        <button onclick="closeClientPortalModal()" class="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
+      </div>
+      
+      <div class="p-6 overflow-y-auto custom-scrollbar space-y-6">
+        <div class="flex gap-2">
+          <input type="text" id="modalAwbInput" placeholder="Enter AWB (e.g. GLD-2026-01)" class="w-full px-4 py-2.5 border rounded-lg text-sm font-mono uppercase focus:ring-2 focus:ring-blue-500">
+          <button onclick="runClientTrackSearch()" class="bg-blue-600 hover:bg-blue-500 text-white font-semibold px-5 py-2.5 rounded-lg text-sm transition">Track</button>
+        </div>
+
+        <div id="modalResult" class="hidden space-y-6 bg-white p-5 rounded-xl border border-slate-200">
+          <div class="flex justify-between items-start border-b border-slate-100 pb-4">
+            <div>
+              <span class="text-xs uppercase font-bold text-slate-400">Air Waybill</span>
+              <h4 id="modalResAwb" class="text-xl font-black text-slate-800 font-mono">---</h4>
+            </div>
+            <span id="modalResBadge" class="px-3 py-1 bg-blue-50 text-blue-600 text-xs font-bold rounded-full">---</span>
+          </div>
+
+          <div>
+            <span class="text-xs uppercase font-bold text-slate-400 block mb-3">Live Progress Timeline</span>
+            <div id="modalTimeline" class="relative border-l-2 border-blue-500 ml-3 space-y-6 pl-6"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- JAVASCRIPT LOGIC CONNECTED TO SUPABASE -->
+  <script>
+    let localConsignments = [];
+
+    // Initialize App Data
+    window.addEventListener('DOMContentLoaded', () => {
+      loadDashboardData();
+    });
+
+    function showToast(msg, isError = false) {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      toast.className = `${isError ? 'bg-red-600' : 'bg-slate-900'} text-white px-4 py-3 rounded-lg shadow-lg text-xs font-semibold flex items-center gap-2 transition transform duration-300`;
+      toast.innerHTML = `<i class="fa-solid ${isError ? 'fa-circle-exclamation' : 'fa-circle-check'}"></i> <span>${msg}</span>`;
+      container.appendChild(toast);
+      setTimeout(() => toast.remove(), 4000);
+    }
+
+    function generateRandomAwb() {
+      const rand = Math.floor(1000 + Math.random() * 9000);
+      document.getElementById('newAwb').value = `GLD-2026-${rand}`;
+    }
+
+    // Fetch Consignments from Supabase
+    async function loadDashboardData() {
+      try {
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/consignments?select=*&order=created_at.desc`, { headers: HEADERS });
+        if (!response.ok) throw new Error("Failed to load database records.");
+        
+        localConsignments = await response.json();
+        renderTable();
+        updateStats();
+        populateSelectDropdown();
+      } catch (err) {
+        showToast(err.message, true);
+        document.getElementById('shipmentsTableBody').innerHTML = `
+          <tr><td colspan="5" class="py-8 text-center text-red-500 font-medium">Database connection error. Check your Supabase API keys.</td></tr>
+        `;
+      }
+    }
+
+    function updateStats() {
+      document.getElementById('statTotal').innerText = localConsignments.length;
+      document.getElementById('statTransit').innerText = localConsignments.filter(c => c.current_status === 'In Transit').length;
+      document.getElementById('statCustoms').innerText = localConsignments.filter(c => c.current_status.includes('Customs')).length;
+      document.getElementById('statDelivered').innerText = localConsignments.filter(c => c.current_status === 'Delivered').length;
+    }
+
+    function populateSelectDropdown() {
+      const select = document.getElementById('updateAwbSelect');
+      select.innerHTML = '<option value="">-- Choose AWB --</option>';
+      localConsignments.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.awb_number;
+        opt.innerText = `${c.awb_number} (${c.destination})`;
+        select.appendChild(opt);
+      });
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById('shipmentsTableBody');
+      if (localConsignments.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="py-8 text-center text-slate-400">No consignments found. Create one above!</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = localConsignments.map(c => `
+        <tr class="hover:bg-slate-50 transition border-b border-slate-100">
+          <td class="py-3 px-4 font-mono font-bold text-blue-600">${c.awb_number}</td>
+          <td class="py-3 px-4">${c.origin} <i class="fa-solid fa-arrow-right text-xs text-slate-400 mx-1"></i> ${c.destination}</td>
+          <td class="py-3 px-4 text-xs text-slate-500">From: <b class="text-slate-700">${c.sender_name}</b><br>To: <b class="text-slate-700">${c.receiver_name}</b></td>
+          <td class="py-3 px-4"><span class="px-2.5 py-1 bg-slate-100 text-slate-700 text-xs font-bold rounded-full">${c.current_status}</span></td>
+          <td class="py-3 px-4 text-right">
+            <button onclick="previewAwb('${c.awb_number}')" class="text-blue-600 hover:text-blue-800 text-xs font-bold">Inspect</button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    // 1. Save New Consignment to Supabase
+    async function handleCreateConsignment(e) {
+      e.preventDefault();
+      const awb = document.getElementById('newAwb').value.trim().toUpperCase();
+      const status = document.getElementById('newStatus').value;
+      const sender = document.getElementById('newSender').value.trim();
+      const receiver = document.getElementById('newReceiver').value.trim();
+      const origin = document.getElementById('newOrigin').value.trim();
+      const destination = document.getElementById('newDestination').value.trim();
+
+      try {
+        // Insert main consignment record
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/consignments`, {
+          method: 'POST',
+          headers: HEADERS,
+          body: JSON.stringify({
+            awb_number: awb,
+            current_status: status,
+            sender_name: sender,
+            receiver_name: receiver,
+            origin: origin,
+            destination: destination
+          })
+        });
+
+        if (!res.ok) throw new Error("Failed to create consignment.");
+
+        // Insert initial log
+        await fetch(`${SUPABASE_URL}/rest/v1/tracking_logs`, {
+          method: 'POST',
+          headers: HEADERS,
+          body: JSON.stringify({
+            awb_number: awb,
+            location: origin,
+            status: status,
+            remarks: "Consignment registered into global tracking system."
+          })
+        });
+
+        showToast(`Consignment ${awb} registered successfully!`);
+        document.getElementById('createForm').reset();
+        loadDashboardData();
+      } catch (err) {
+        showToast(err.message, true);
+      }
+    }
+
+    // 2. Post Milestone Log Update to Supabase
+    async function handlePostMilestone(e) {
+      e.preventDefault();
+      const awb = document.getElementById('updateAwbSelect').value;
+      const status = document.getElementById('updateStatus').value;
+      const location = document.getElementById('updateLocation').value.trim();
+      const remarks = document.getElementById('updateRemarks').value.trim();
+
+      try {
+        // 1. Update status on main consignment record
+        await fetch(`${SUPABASE_URL}/rest/v1/consignments?awb_number=eq.${awb}`, {
+          method: 'PATCH',
+          headers: HEADERS,
+          body: JSON.stringify({ current_status: status })
+        });
+
+        // 2. Add log entry
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/tracking_logs`, {
+          method: 'POST',
+          headers: HEADERS,
+          body: JSON.stringify({
+            awb_number: awb,
+            location: location,
+            status: status,
+            remarks: remarks
+          })
+        });
+
+        if (!res.ok) throw new Error("Failed to post milestone log.");
+
+        showToast(`New checkpoint logged for ${awb}!`);
+        document.getElementById('updateForm').reset();
+        loadDashboardData();
+      } catch (err) {
+        showToast(err.message, true);
+      }
+    }
+
+    // Client Portal Search Logic
+    function openClientPortalModal() {
+      document.getElementById('clientModal').classList.remove('hidden');
+    }
+
+    function closeClientPortalModal() {
+      document.getElementById('clientModal').classList.add('hidden');
+    }
+
+    function previewAwb(awb) {
+      document.getElementById('modalAwbInput').value = awb;
+      openClientPortalModal();
+      runClientTrackSearch();
+    }
+
+    async function runClientTrackSearch() {
+      const awb = document.getElementById('modalAwbInput').value.trim().toUpperCase();
+      const resultBox = document.getElementById('modalResult');
+      const timelineBox = document.getElementById('modalTimeline');
+
+      if (!awb) return;
+
+      try {
+        const resLogs = await fetch(`${SUPABASE_URL}/rest/v1/tracking_logs?awb_number=eq.${awb}&order=timestamp.desc`, { headers: HEADERS });
+        const logs = await resLogs.json();
+
+        if (logs.length === 0) {
+          showToast("No tracking records found for this AWB", true);
+          resultBox.classList.add('hidden');
+          return;
+        }
+
+        document.getElementById('modalResAwb').innerText = awb;
+        document.getElementById('modalResBadge').innerText = logs[0].status;
+
+        timelineBox.innerHTML = logs.map(log => `
+          <div class="relative">
+            <span class="absolute -left-[31px] top-0 bg-blue-600 text-white w-5 h-5 rounded-full flex items-center justify-center text-[10px]">
+              <i class="fa-solid fa-check"></i>
+            </span>
+            <div class="text-xs text-slate-400 font-mono">${new Date(log.timestamp).toLocaleString()}</div>
+            <div class="font-bold text-slate-800 text-sm">${log.status} &mdash; <span class="text-blue-600">${log.location}</span></div>
+            ${log.remarks ? `<p class="text-xs text-slate-500 mt-0.5">${log.remarks}</p>` : ''}
+          </div>
+        `).join('');
+
+        resultBox.classList.remove('hidden');
+      } catch (err) {
+        showToast("Error searching tracking logs", true);
+      }
+    }
+  </script>
+</body>
+</html>

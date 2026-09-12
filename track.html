@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Track Your Consignment</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-800 font-sans min-h-screen flex flex-col justify-between">
+
+  <!-- SUPABASE CONFIGURATION -->
+  <script>
+    const SUPABASE_URL = "https://zbsjubpejuvcyfmptwcv.supabase.co";
+    // PASTE YOUR PUBLIC ANON KEY (eyJ...) BETWEEN THE QUOTES BELOW:
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpic2p1YnBlanV2Y3lmbXB0d2N2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkyMTI4OTMsImV4cCI6MjEwNDc4ODg5M30.RnFdQcS3GmqSJ-hR-a3WJAK1n9ym44dMDWVrRYdYmus";
+
+    const HEADERS = {
+      "apikey": SUPABASE_ANON_KEY,
+      "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+      "Content-Type": "application/json"
+    };
+  </script>
+
+  <!-- Client Header -->
+  <header class="bg-slate-900/80 backdrop-blur border-b border-slate-800 py-6">
+    <div class="max-w-4xl mx-auto px-4 flex items-center justify-between">
+      <div class="flex items-center space-x-3 text-white">
+        <i class="fa-solid fa-boxes-packing text-blue-500 text-2xl"></i>
+        <span class="font-bold text-xl tracking-wide">Global Cargo Tracking</span>
+      </div>
+      <span class="text-xs text-slate-400">24/7 Portal</span>
+    </div>
+  </header>
+
+  <!-- Main Search & Results Body -->
+  <main class="max-w-2xl mx-auto w-full px-4 py-12 flex-grow">
+    
+    <!-- Search Box -->
+    <div class="bg-white rounded-2xl shadow-xl p-6 sm:p-8 mb-8 border border-slate-200 text-center space-y-4">
+      <h1 class="text-2xl font-black text-slate-900">Track Your Shipment</h1>
+      <p class="text-slate-500 text-sm">Enter your Air Waybill (AWB) number below to see live milestone updates.</p>
+      
+      <form onsubmit="searchTracking(event)" class="flex gap-2 max-w-md mx-auto pt-2">
+        <input type="text" id="clientAwbInput" required placeholder="e.g. GLD-2026-99" class="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-600 focus:outline-none uppercase font-mono font-bold text-slate-800">
+        <button type="submit" class="bg-blue-600 hover:bg-blue-500 text-white font-bold px-6 py-3 rounded-xl transition flex items-center gap-2">
+          <i class="fa-solid fa-magnifying-glass"></i> Track
+        </button>
+      </form>
+    </div>
+
+    <!-- Error / Not Found Alert -->
+    <div id="notFoundError" class="hidden bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl text-center text-sm font-semibold mb-8">
+      No tracking record found for this AWB number. Please verify the code and try again.
+    </div>
+
+    <!-- Results Panel (Hidden by default) -->
+    <div id="trackingResult" class="hidden bg-white rounded-2xl shadow-xl p-6 sm:p-8 border border-slate-200 space-y-6">
+      
+      <!-- Shipment Summary Bar -->
+      <div class="flex flex-wrap items-center justify-between border-b border-slate-100 pb-4 gap-4">
+        <div>
+          <span class="text-xs font-bold uppercase text-slate-400 tracking-wider">Waybill Number</span>
+          <h2 id="displayAwb" class="text-2xl font-black font-mono text-slate-800">---</h2>
+        </div>
+        <div>
+          <span class="text-xs font-bold uppercase text-slate-400 tracking-wider block mb-1">Current Status</span>
+          <span id="displayStatus" class="px-3 py-1 bg-blue-100 text-blue-700 font-bold text-sm rounded-full inline-block">---</span>
+        </div>
+      </div>
+
+      <!-- History Stream -->
+      <div>
+        <h3 class="text-xs font-bold uppercase text-slate-400 tracking-wider mb-4">Shipment Progress Log</h3>
+        <div id="timelineContainer" class="relative border-l-2 border-blue-600 ml-4 space-y-6 pl-6">
+          <!-- Dynamically populated -->
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Simple Footer -->
+  <footer class="py-6 text-center text-xs text-slate-500 border-t border-slate-800">
+    &copy; 2026 Cargo Tracking Systems. All rights reserved.
+  </footer>
+
+  <script>
+    // Auto-search if AWB is provided in URL parameters (e.g. track.html?awb=GLD-2026-99)
+    window.addEventListener('DOMContentLoaded', () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const awbParam = urlParams.get('awb');
+      if (awbParam) {
+        document.getElementById('clientAwbInput').value = awbParam;
+        performSearch(awbParam);
+      }
+    });
+
+    function searchTracking(e) {
+      e.preventDefault();
+      const awb = document.getElementById('clientAwbInput').value.trim().toUpperCase();
+      performSearch(awb);
+    }
+
+    async function performSearch(awb) {
+      const resultBox = document.getElementById('trackingResult');
+      const errorBox = document.getElementById('notFoundError');
+      const timeline = document.getElementById('timelineContainer');
+
+      errorBox.classList.add('hidden');
+      resultBox.classList.add('hidden');
+
+      try {
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/tracking_logs?awb_number=eq.${awb}&order=timestamp.desc`, { headers: HEADERS });
+        const logs = await res.json();
+
+        if (!logs || logs.length === 0) {
+          errorBox.classList.remove('hidden');
+          return;
+        }
+
+        document.getElementById('displayAwb').innerText = awb;
+        document.getElementById('displayStatus').innerText = logs[0].status;
+
+        timeline.innerHTML = logs.map((log, idx) => `
+          <div class="relative">
+            <span class="absolute -left-[31px] top-0 ${idx === 0 ? 'bg-blue-600 ring-4 ring-blue-100' : 'bg-slate-400'} text-white w-5 h-5 rounded-full flex items-center justify-center text-[10px]">
+              <i class="fa-solid fa-check"></i>
+            </span>
+            <div class="text-xs text-slate-400 font-mono">${new Date(log.timestamp).toLocaleString()}</div>
+            <div class="font-bold text-slate-800 text-sm mt-0.5">${log.status} &mdash; <span class="text-blue-600 font-semibold">${log.location}</span></div>
+            ${log.remarks ? `<p class="text-xs text-slate-500 mt-1 bg-slate-50 p-2 rounded-lg border border-slate-100">${log.remarks}</p>` : ''}
+          </div>
+        `).join('');
+
+        resultBox.classList.remove('hidden');
+      } catch (err) {
+        errorBox.innerText = "Error connecting to server. Please try again later.";
+        errorBox.classList.remove('hidden');
+      }
+    }
+  </script>
+</body>
+</html>
